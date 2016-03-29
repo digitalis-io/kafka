@@ -450,7 +450,7 @@ object Cli {
 
     private def handleAddUpdate(expr: String, args: Array[String], add: Boolean, help: Boolean = false): Unit = {
       val parser = newParser()
-      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "cluster id").withRequiredArg().ofType(classOf[String])
 
       parser.accepts("cpus", "cpu amount (0.5, 1, 2)").withRequiredArg().ofType(classOf[java.lang.Double])
       parser.accepts("mem", "mem amount in Mb").withRequiredArg().ofType(classOf[java.lang.Long])
@@ -865,7 +865,7 @@ object Cli {
 
     def handleList(expr: String, args: Array[String], help: Boolean = false): Unit = {
       val parser = newParser()
-      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "cluster id").withRequiredArg().ofType(classOf[String])
 
       if (help) {
         printLine("List topics\nUsage: topic list [<topic-expr>] --cluster <cluster-id>\n")
@@ -919,7 +919,7 @@ object Cli {
         parser.accepts("replicas", "replicas count. Default - 1").withRequiredArg().ofType(classOf[Integer])
       }
       parser.accepts("options", "topic options. Example: flush.ms=60000,retention.ms=6000000").withRequiredArg().ofType(classOf[String])
-      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "cluster id").withRequiredArg().ofType(classOf[String])
 
       if (help) {
         printLine(s"${cmd.capitalize} topic\nUsage: topic $cmd <topic-expr> [options]\n")
@@ -986,7 +986,7 @@ object Cli {
       parser.accepts("broker", "<broker-expr>. Default - *. See below.").withRequiredArg().ofType(classOf[String])
       parser.accepts("replicas", "replicas count. Default - 1").withRequiredArg().ofType(classOf[Integer])
       parser.accepts("timeout", "timeout (30s, 1m, 1h). 0s - no timeout").withRequiredArg().ofType(classOf[String])
-      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "cluster id").withRequiredArg().ofType(classOf[String])
 
       if (help) {
         printLine("Rebalance topics\nUsage: topic rebalance <topic-expr>|status [options]\n")
