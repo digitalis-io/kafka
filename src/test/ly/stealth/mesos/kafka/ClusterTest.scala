@@ -20,7 +20,8 @@ package ly.stealth.mesos.kafka
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-class ClusterTest extends MesosTestCase {
+class ClusterTest extends KafkaMesosTestCase {
+
   @Before
   override def before {
     super.before
