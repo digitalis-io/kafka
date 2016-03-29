@@ -167,7 +167,7 @@ object HttpServer {
         return
       }
 
-      val errors = new util.ArrayList[String]()
+      val errors = new util.ArrayList[String]
       var cluster = Nodes.getCluster(id)
       if (add && cluster != null)
         errors.add("duplicate cluster")
@@ -177,7 +177,7 @@ object HttpServer {
         errors.add("cluster has active nodes")
 
       if (add && zkConnect == null || zkConnect.trim.isEmpty)
-          errors.add(404, "cluster has active nodes")
+          errors.add("zk connection string is empty")
 
       if (!errors.isEmpty) { response.sendError(400, errors.mkString("; ")); return }
 

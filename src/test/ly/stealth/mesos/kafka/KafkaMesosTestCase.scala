@@ -1,9 +1,8 @@
 package ly.stealth.mesos.kafka
 
-import java.io.{FileWriter, File}
+import java.io.File
 import org.I0Itec.zkclient.{ZkClient, IDefaultNameSpace, ZkServer}
 import org.apache.log4j.BasicConfigurator
-import ly.stealth.mesos.kafka.Cluster.FsStorage
 import net.elodina.mesos.util.{IO, Net, Version}
 import org.junit.{Ignore, Before, After}
 import scala.concurrent.duration.Duration
@@ -14,6 +13,7 @@ import java.util
 class KafkaMesosTestCase extends net.elodina.mesos.test.MesosTestCase {
   var zkDir: File = null
   var zkServer: ZkServer = null
+  var testCluster: Cluster = null
 
   @Before
   def before {
@@ -21,13 +21,17 @@ class KafkaMesosTestCase extends net.elodina.mesos.test.MesosTestCase {
 
     val storageFile = File.createTempFile(getClass.getSimpleName, null)
     storageFile.delete()
-    Cluster.storage = new FsStorage(storageFile)
+    Nodes.storage = new FsStorage(storageFile)
 
     Config.api = "http://localhost:7000"
-    Config.zk = "localhost"
 
-    Scheduler.cluster.clear()
-    Scheduler.cluster.rebalancer = new TestRebalancer()
+    Nodes.clear()
+
+    testCluster = new Cluster("default")
+    testCluster.zkConnect = "localhost"
+    Nodes.addCluster(testCluster)
+
+    testCluster.rebalancer = new TestRebalancer(() => testCluster.zkConnect)
     Scheduler.reconciles = 0
     Scheduler.reconcileTime = null
 
@@ -51,11 +55,11 @@ class KafkaMesosTestCase extends net.elodina.mesos.test.MesosTestCase {
   def after {
     Scheduler.disconnected(schedulerDriver)
 
-    Scheduler.cluster.rebalancer = new Rebalancer()
+    testCluster.rebalancer = new TestRebalancer(() => "localhost")
 
-    val storage = Cluster.storage.asInstanceOf[FsStorage]
+    val storage = Nodes.storage.asInstanceOf[FsStorage]
     storage.file.delete()
-    Cluster.storage = new FsStorage(FsStorage.DEFAULT_FILE)
+    Nodes.storage = new FsStorage(FsStorage.DEFAULT_FILE)
 
     Executor.server.stop()
     Executor.server = new KafkaServer()
@@ -64,7 +68,7 @@ class KafkaMesosTestCase extends net.elodina.mesos.test.MesosTestCase {
 
   def startZkServer() {
     val port = Net.findAvailPort
-    Config.zk = s"localhost:$port"
+    testCluster.zkConnect = s"localhost:$port"
 
     zkDir = File.createTempFile(getClass.getName, null)
     zkDir.delete()
@@ -138,7 +142,7 @@ class TestBrokerServer extends BrokerServer {
   def getClassLoader: ClassLoader = getClass.getClassLoader
 }
 
-class TestRebalancer extends Rebalancer {
+class TestRebalancer(zkConnect: () => String) extends Rebalancer(zkConnect) {
   var _running: Boolean = false
   var _failOnStart: Boolean = false
 
