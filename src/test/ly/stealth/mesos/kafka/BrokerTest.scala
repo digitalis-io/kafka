@@ -32,6 +32,7 @@ class BrokerTest extends MesosTestCase {
   override def before {
     super.before
     broker = new Broker("0")
+    broker.cluster = testCluster
     broker.cpus = 0
     broker.mem = 0
   }
@@ -328,6 +329,7 @@ class BrokerTest extends MesosTestCase {
 
   @Test
   def toJson_fromJson {
+    broker.cluster = testCluster
     broker.active = true
     broker.cpus = 0.5
     broker.mem = 128
@@ -345,9 +347,12 @@ class BrokerTest extends MesosTestCase {
     broker.task = new Task("1", "slave", "executor", "host")
 
     val read: Broker = new Broker()
-    read.fromJson(Util.parseJson("" + broker.toJson))
-
+    read.fromJson(Util.parseJson("" + broker.toJson()))
     BrokerTest.assertBrokerEquals(broker, read)
+
+    val readExpanded: Broker = new Broker()
+    readExpanded.fromJson(Util.parseJson("" + broker.toJson(expanded = true)), expanded = true)
+    BrokerTest.assertBrokerEquals(broker, readExpanded)
   }
 
   // static part
@@ -531,6 +536,7 @@ object BrokerTest {
   def assertBrokerEquals(expected: Broker, actual: Broker) {
     if (checkNulls(expected, actual)) return
 
+    assertEquals(expected.cluster.id, actual.cluster.id)
     assertEquals(expected.id, actual.id)
     assertEquals(expected.active, actual.active)
 

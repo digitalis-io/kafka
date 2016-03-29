@@ -31,8 +31,8 @@ import scala.util.parsing.json.JSONObject
 import ly.stealth.mesos.kafka.Topics.Topic
 import kafka.log.LogConfig
 
-class Topics {
-  private def newZkClient: ZkClient = new ZkClient(Config.zk, 30000, 30000, ZKStringSerializer)
+class Topics(zkConnect: () => String) {
+  private def newZkClient: ZkClient = new ZkClient(zkConnect(), 30000, 30000, ZKStringSerializer)
 
   def getTopic(name: String): Topics.Topic = {
     if (name == null) return null

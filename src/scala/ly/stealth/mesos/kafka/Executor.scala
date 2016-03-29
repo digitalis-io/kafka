@@ -71,7 +71,7 @@ object Executor extends org.apache.mesos.Executor {
       try {
         val data: util.Map[String, String] = Util.parseMap(task.getData.toStringUtf8)
         val broker = new Broker()
-        broker.fromJson(Util.parseJson(data.get("broker")))
+        broker.fromJson(Util.parseJson(data.get("broker")), expanded = true)
 
         val defaults = Util.parseMap(data.get("defaults"))
         val endpoint = server.start(broker, defaults)

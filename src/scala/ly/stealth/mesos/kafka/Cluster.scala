@@ -1,159 +1,51 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package ly.stealth.mesos.kafka
 
-import java.util
-import scala.util.parsing.json.{JSONArray, JSONObject}
-import scala.collection.JavaConversions._
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
-import java.util.Collections
-import java.io.{FileWriter, File}
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.ZKStringSerializer
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import scala.util.parsing.json.JSONObject
 
 class Cluster {
-  private val brokers: util.List[Broker] = new util.concurrent.CopyOnWriteArrayList[Broker]()
-  private[kafka] var rebalancer: Rebalancer = new Rebalancer()
-  private[kafka] var topics: Topics = new Topics()
-  private[kafka] var frameworkId: String = null
+  var id: String = null
+  var zkConnect: String = null
 
-  def getBrokers:util.List[Broker] = Collections.unmodifiableList(brokers)
+  private[kafka] var topics: Topics = new Topics(() => zkConnect)
+  private[kafka] var rebalancer: Rebalancer = new Rebalancer(() => zkConnect)
 
-  def getBroker(id: String): Broker = {
-    for (broker <- brokers)
-      if (broker.id == id) return broker
-    null
+  def this(_id: String) {
+    this
+    id = _id
   }
 
-  def addBroker(broker: Broker): Broker = {
-    brokers.add(broker)
-    broker
+  def this(json: Map[String, Any]) {
+    this
+    fromJson(json)
   }
 
-  def removeBroker(broker: Broker): Unit = brokers.remove(broker)
+  def getBrokers: List[Broker] = Nodes.getBrokers.filter(_.cluster == this)
 
-  def clear(): Unit = brokers.clear()
-  def load() = Cluster.storage.load(this)
-  def save() = Cluster.storage.save(this)
+  def active: Boolean = getBrokers.exists(_.active)
+  def idle: Boolean = !active
 
-  def fromJson(root: Map[String, Object]): Unit = {
-    if (root.contains("brokers")) {
-      for (brokerNode <- root("brokers").asInstanceOf[List[Map[String, Object]]]) {
-        val broker: Broker = new Broker()
-        broker.fromJson(brokerNode)
-        brokers.add(broker)
-      }
-    }
-
-    if (root.contains("frameworkId"))
-      frameworkId = root("frameworkId").asInstanceOf[String]
+  def fromJson(json: Map[String, Any]): Unit = {
+    id = json("id").asInstanceOf[String]
+    if (json.contains("zkConnect"))
+      zkConnect = json("zkConnect").asInstanceOf[String]
   }
 
   def toJson: JSONObject = {
-    val obj = new mutable.LinkedHashMap[String, Object]()
+    val json = new mutable.LinkedHashMap[String, Any]()
+    json("id") = id
+    if (zkConnect != null)
+      json("zkConnect") = zkConnect
 
-    if (!brokers.isEmpty) {
-      val brokerNodes = new ListBuffer[JSONObject]()
-      for (broker <- brokers)
-        brokerNodes.add(broker.toJson)
-      obj("brokers") = new JSONArray(brokerNodes.toList)
-    }
-
-    if (frameworkId != null) obj("frameworkId") = frameworkId
-    new JSONObject(obj.toMap)
-  }
-}
-
-object Cluster {
-  var storage: Storage = newStorage(Config.storage)
-
-  def newStorage(s: String): Storage = {
-    if (s.startsWith("file:")) return new FsStorage(new File(s.substring("file:".length)))
-    else if (s.startsWith("zk:")) return new ZkStorage(s.substring("zk:".length))
-    throw new IllegalStateException("Unsupported storage " + s)
+    new JSONObject(json.toMap)
   }
 
-  abstract class Storage {
-    def load(cluster: Cluster): Unit = {
-      val json: String = loadJson
-      if (json == null) return
-      
-      val node: Map[String, Object] = Util.parseJson(json)
-      cluster.brokers.clear()
-      cluster.fromJson(node)
-    }
-    
-    def save(cluster: Cluster): Unit = {
-      saveJson("" + cluster.toJson)
-    }
-    
-    protected def loadJson: String
-    protected def saveJson(json: String): Unit
+  override def hashCode(): Int = id.hashCode
+
+  override def equals(obj: scala.Any): Boolean = {
+    if (!obj.isInstanceOf[Cluster]) false
+    else id == obj.asInstanceOf[Cluster].id
   }
 
-  class FsStorage(val file: File) extends Storage {
-    protected def loadJson: String = {
-      if (!file.exists) return null
-      val source = scala.io.Source.fromFile(file)
-      try source.mkString finally source.close()
-    }
-
-    protected def saveJson(json: String): Unit = {
-      val writer  = new FileWriter(file)
-      try { writer.write(json) }
-      finally { writer.close() }
-    }
-  }
-
-  object FsStorage {
-    val DEFAULT_FILE: File = new File("kafka-mesos.json")
-  }
-
-  class ZkStorage(val path: String) extends Storage {
-    createChrootIfRequired()
-
-    def zkClient: ZkClient = new ZkClient(Config.zk, 30000, 30000, ZKStringSerializer)
-
-    private def createChrootIfRequired(): Unit = {
-      val slashIdx: Int = Config.zk.indexOf('/')
-      if (slashIdx == -1) return
-
-      val chroot = Config.zk.substring(slashIdx)
-      val zkConnect = Config.zk.substring(0, slashIdx)
-
-      val client = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
-      try { client.createPersistent(chroot, true) }
-      finally { client.close() }
-    }
-
-    protected def loadJson: String = {
-      val zkClient = this.zkClient
-      try { zkClient.readData(path, true).asInstanceOf[String] }
-      finally { zkClient.close() }
-    }
-
-    protected def saveJson(json: String): Unit = {
-      val zkClient = this.zkClient
-      try { zkClient.createPersistent(path, json) }
-      catch { case e: ZkNodeExistsException => zkClient.writeData(path, json) }
-      finally { zkClient.close() }
-    }
-  }
+  override def toString: String = id
 }

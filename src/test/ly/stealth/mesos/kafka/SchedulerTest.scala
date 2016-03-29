@@ -44,7 +44,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def newTask {
-    val broker = new Broker("1")
+    val broker = new Broker("1", testCluster)
     broker.options = Util.parseMap("a=1")
     broker.log4jOptions = Util.parseMap("b=2")
     broker.cpus = 0.5
@@ -64,13 +64,13 @@ class SchedulerTest extends MesosTestCase {
     val data: util.Map[String, String] = Util.parseMap(task.getData.toStringUtf8)
     
     val readBroker: Broker = new Broker()
-    readBroker.fromJson(Util.parseJson(data.get("broker")))
+    readBroker.fromJson(Util.parseJson(data.get("broker")), expanded = true)
     BrokerTest.assertBrokerEquals(broker, readBroker)
 
     val defaults = Util.parseMap(data.get("defaults"))
     assertEquals(broker.id, defaults.get("broker.id"))
     assertEquals("" + 1000, defaults.get("port"))
-    assertEquals(Config.zk, defaults.get("zookeeper.connect"))
+    assertEquals(testCluster.zkConnect, defaults.get("zookeeper.connect"))
 
     assertEquals("kafka-logs", defaults.get("log.dirs"))
     assertEquals(offer.getHostname, defaults.get("host.name"))
@@ -78,7 +78,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def syncBrokers {
-    val broker = Scheduler.cluster.addBroker(new Broker())
+    val broker = Nodes.addBroker(new Broker("0", testCluster))
     val offer = this.offer(resources = s"cpus:${broker.cpus}; mem:${broker.mem}; ports:1000")
 
     // broker !active
@@ -101,7 +101,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def acceptOffer {
-    val broker = Scheduler.cluster.addBroker(new Broker())
+    val broker = Nodes.addBroker(new Broker("0", testCluster))
     broker.active = true
 
     broker.task = new Broker.Task(_state = Broker.State.RECONCILING)
@@ -119,7 +119,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def onBrokerStatus {
-    val broker = Scheduler.cluster.addBroker(new Broker())
+    val broker = Nodes.addBroker(new Broker("0", testCluster))
     broker.task = new Broker.Task(Broker.nextTaskId(broker), "slave", "executor", "host")
     assertEquals(Broker.State.STARTING, broker.task.state)
 
@@ -136,7 +136,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def onBrokerStarted {
-    val broker = Scheduler.cluster.addBroker(new Broker())
+    val broker = Nodes.addBroker(new Broker())
     broker.task = new Broker.Task("task")
     assertEquals(Broker.State.STARTING, broker.task.state)
 
@@ -147,7 +147,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def onBrokerStopped {
-    val broker = Scheduler.cluster.addBroker(new Broker())
+    val broker = Nodes.addBroker(new Broker())
     val task = new Broker.Task("task", _state = Broker.State.RUNNING)
 
     // finished
@@ -182,7 +182,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def launchTask {
-    val broker = Scheduler.cluster.addBroker(new Broker("100"))
+    val broker = Nodes.addBroker(new Broker("100", testCluster))
     val offer = this.offer(resources = s"cpus:${broker.cpus}; mem:${broker.mem}", attributes = "a=1,b=2")
     broker.needsRestart = true
 
@@ -201,12 +201,12 @@ class SchedulerTest extends MesosTestCase {
   @Test
   def reconcileTasksIfRequired {
     Scheduler.reconcileTime = null
-    val broker0 = Scheduler.cluster.addBroker(new Broker("0"))
+    val broker0 = Nodes.addBroker(new Broker("0"))
 
-    val broker1 = Scheduler.cluster.addBroker(new Broker("1"))
+    val broker1 = Nodes.addBroker(new Broker("1"))
     broker1.task = new Broker.Task(_id = "1", _state = Broker.State.RUNNING)
 
-    val broker2 = Scheduler.cluster.addBroker(new Broker("2"))
+    val broker2 = Nodes.addBroker(new Broker("2"))
     broker2.task = new Broker.Task(_id = "2", _state = Broker.State.STARTING)
 
     Scheduler.reconcileTasksIfRequired(force = true, now = new Date(0))
@@ -232,10 +232,10 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def otherTasksAttributes {
-    val broker0 = Scheduler.cluster.addBroker(new Broker("0"))
+    val broker0 = Nodes.addBroker(new Broker("0"))
     broker0.task = new Broker.Task(_hostname = "host0", _attributes = Util.parseMap("a=1,b=2"))
 
-    val broker1 = Scheduler.cluster.addBroker(new Broker("1"))
+    val broker1 = Nodes.addBroker(new Broker("1"))
     broker1.task = new Broker.Task(_hostname = "host1", _attributes = Util.parseMap("b=3"))
 
     assertArrayEquals(Array[AnyRef]("host0", "host1"), Scheduler.otherTasksAttributes("hostname").asInstanceOf[Array[AnyRef]])
@@ -245,9 +245,9 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def onFrameworkMessage = {
-    val broker0 = Scheduler.cluster.addBroker(new Broker("0"))
+    val broker0 = Nodes.addBroker(new Broker("0"))
     broker0.active = true
-    val broker1 = Scheduler.cluster.addBroker(new Broker("1"))
+    val broker1 = Nodes.addBroker(new Broker("1"))
     broker1.active = true
 
     assertNull(broker0.metrics)
@@ -292,7 +292,7 @@ class SchedulerTest extends MesosTestCase {
 
   @Test
   def sendReceiveBrokerLog = {
-    val broker = Scheduler.cluster.addBroker(new Broker("0"))
+    val broker = Nodes.addBroker(new Broker("0"))
     broker.task = new Broker.Task("task-id", "slave-id", "executor-id")
 
     // driver connected

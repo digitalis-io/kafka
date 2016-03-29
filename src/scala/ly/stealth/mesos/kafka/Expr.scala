@@ -9,7 +9,7 @@ import ly.stealth.mesos.kafka.Broker.Task
 import java.lang.Comparable
 
 object Expr {
-  def expandBrokers(cluster: Cluster, _expr: String, sortByAttrs: Boolean = false): util.List[String] = {
+  def expandBrokers(_expr: String, sortByAttrs: Boolean = false): util.List[String] = {
     var expr: String = _expr
     var attributes: util.Map[String, String] = null
     
@@ -27,7 +27,7 @@ object Expr {
       val part = _part.trim()
 
       if (part.equals("*"))
-        for (broker <- cluster.getBrokers) ids.add(broker.id)
+        for (broker <- Nodes.getBrokers) ids.add(broker.id)
       else if (part.contains("..")) {
         val idx = part.indexOf("..")
 
@@ -53,12 +53,12 @@ object Expr {
     ids = new util.ArrayList[String](ids.distinct.sorted.toList)
 
     if (attributes != null) 
-      filterAndSortBrokersByAttrs(cluster, ids, attributes, sortByAttrs)
+      filterAndSortBrokersByAttrs(ids, attributes, sortByAttrs)
 
     ids
   }
   
-  private def filterAndSortBrokersByAttrs(cluster: Cluster, ids: util.Collection[String], attributes: util.Map[String, String], sortByAttrs: Boolean): Unit = {
+  private def filterAndSortBrokersByAttrs(ids: util.Collection[String], attributes: util.Map[String, String], sortByAttrs: Boolean): Unit = {
     def brokerAttr(broker: Broker, name: String): String = {
       if (broker == null || broker.task == null) return null
 
@@ -90,7 +90,7 @@ object Expr {
       val iterator = ids.iterator()
       while (iterator.hasNext) {
         val id = iterator.next()
-        val broker = cluster.getBroker(id)
+        val broker = Nodes.getBroker(id)
 
         if (!brokerMatches(broker))
           iterator.remove()
@@ -119,7 +119,7 @@ object Expr {
 
       val values = new util.HashMap[Value, util.List[String]]()
       for (id <- ids) {
-        val broker: Broker = cluster.getBroker(id)
+        val broker: Broker = Nodes.getBroker(id)
 
         if (broker != null) {
           val value = new Value(broker)
@@ -161,10 +161,10 @@ object Expr {
     out.println("  0..4[rack=r1,dc=dc1] - any broker having rack=r1 and dc=dc1")
   }
 
-  def expandTopics(expr: String): util.List[String] = {
+  def expandTopics(expr: String, cluster: Cluster): util.List[String] = {
     val topics = new util.TreeSet[String]()
 
-    val zkClient = newZkClient
+    val zkClient = newZkClient(cluster.zkConnect)
     var allTopics: util.List[String] = null
     try { allTopics = ZkUtils.getAllTopics(zkClient) }
     finally { zkClient.close() }
@@ -188,5 +188,5 @@ object Expr {
     out.println("  t*        - topics starting with 't'")
   }
 
-  private def newZkClient: ZkClient = new ZkClient(Config.zk, 30000, 30000, ZKStringSerializer)
+  private def newZkClient(zkConnect: String): ZkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
 }

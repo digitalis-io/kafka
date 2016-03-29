@@ -1,6 +1,6 @@
 package ly.stealth.mesos.kafka
 
-import org.junit.{After, Before, Test}
+import org.junit.{BeforeClass, After, Before, Test}
 import org.junit.Assert._
 import ly.stealth.mesos.kafka.Topics.Topic
 import java.util
@@ -12,7 +12,7 @@ class TopicsTest extends MesosTestCase {
   override def before {
     super.before
     startZkServer()
-    topics = Scheduler.cluster.topics
+    topics = testCluster.topics
   }
 
   @After

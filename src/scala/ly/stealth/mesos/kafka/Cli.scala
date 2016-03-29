@@ -67,6 +67,7 @@ object Cli {
     cmd match {
       case "topic" => TopicCli.handle(subCmd, args)
       case "broker" => BrokerCli.handle(subCmd, args)
+      case "cluster" => ClusterCli.handle(subCmd, args)
       case _ => throw new Error("unsupported command " + cmd)
     }
   }
@@ -132,13 +133,13 @@ object Cli {
     Util.formatMap(map)
   }
 
-  private def newParser(): OptionParser = {
+  private[kafka] def newParser(): OptionParser = {
     val parser: OptionParser = new OptionParser()
     parser.formatHelpWith(new BuiltinHelpFormatter(Util.terminalWidth, 2))
     parser
   }
 
-  private def printCmds(): Unit = {
+  private[kafka] def printCmds(): Unit = {
     printLine("Commands:")
     printLine("help [cmd [cmd]] - print general or command-specific help", 1)
     if (SchedulerCli.isEnabled) printLine("scheduler        - start scheduler", 1)
@@ -146,7 +147,7 @@ object Cli {
     printLine("topic            - topic management commands", 1)
   }
 
-  private def printLine(s: Object = "", indent: Int = 0): Unit = out.println("  " * indent + s)
+  private[kafka] def printLine(s: Object = "", indent: Int = 0): Unit = out.println("  " * indent + s)
 
   private[kafka] def resolveApi(apiOption: String): Unit = {
     if (api != null) return
@@ -231,7 +232,7 @@ object Cli {
       parser.accepts("storage",
         """Storage for cluster state. Examples:
           | - file:kafka-mesos.json
-          | - zk:/kafka-mesos
+          | - zk://master:2181/kafka-mesos
           |Default - """.stripMargin + Config.storage)
         .withRequiredArg().ofType(classOf[String])
 
@@ -264,17 +265,10 @@ object Cli {
       parser.accepts("framework-timeout", "Framework timeout (30s, 1m, 1h). Default - " + Config.frameworkTimeout)
         .withRequiredArg().ofType(classOf[String])
 
-
       parser.accepts("api", "Api url. Example: http://master:7000")
         .withRequiredArg().ofType(classOf[String])
 
       parser.accepts("bind-address", "Scheduler bind address (master, 0.0.0.0, 192.168.50.*, if:eth1). Default - all")
-        .withRequiredArg().ofType(classOf[String])
-
-      parser.accepts("zk",
-        """Kafka zookeeper.connect. Examples:
-          | - master:2181
-          | - master:2181,master2:2181""".stripMargin)
         .withRequiredArg().ofType(classOf[String])
 
       parser.accepts("jre", "JRE zip-file (jre-7-openjdk.zip). Default - none.")
@@ -353,10 +347,6 @@ object Cli {
       if (bindAddress != null)
         try { Config.bindAddress = new BindAddress(bindAddress) }
         catch { case e: IllegalArgumentException => throw new Error("Invalid bind-address") }
-
-      val zk = options.valueOf("zk").asInstanceOf[String]
-      if (zk != null) Config.zk = zk
-      else if (Config.zk == null) throw new Error(s"Undefined zk. $provideOption")
 
       val jre = options.valueOf("jre").asInstanceOf[String]
       if (jre != null) Config.jre = new File(jre)
@@ -450,7 +440,7 @@ object Cli {
 
       for (brokerNode <- brokerNodes) {
         val broker = new Broker()
-        broker.fromJson(brokerNode)
+        broker.fromJson(brokerNode, expanded = true)
 
         printBroker(broker, 1)
         printLine()
@@ -459,6 +449,8 @@ object Cli {
 
     private def handleAddUpdate(expr: String, args: Array[String], add: Boolean, help: Boolean = false): Unit = {
       val parser = newParser()
+      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+
       parser.accepts("cpus", "cpu amount (0.5, 1, 2)").withRequiredArg().ofType(classOf[java.lang.Double])
       parser.accepts("mem", "mem amount in Mb").withRequiredArg().ofType(classOf[java.lang.Long])
       parser.accepts("heap", "heap amount in Mb").withRequiredArg().ofType(classOf[java.lang.Long])
@@ -503,6 +495,7 @@ object Cli {
           throw new Error(e.getMessage)
       }
 
+      val cluster = options.valueOf("cluster").asInstanceOf[String]
       val cpus = options.valueOf("cpus").asInstanceOf[java.lang.Double]
       val mem = options.valueOf("mem").asInstanceOf[java.lang.Long]
       val heap = options.valueOf("heap").asInstanceOf[java.lang.Long]
@@ -523,6 +516,7 @@ object Cli {
       val params = new util.LinkedHashMap[String, String]
       params.put("broker", expr)
 
+      if (cluster != null) params.put("cluster", cluster)
       if (cpus != null) params.put("cpus", "" + cpus)
       if (mem != null) params.put("mem", "" + mem)
       if (heap != null) params.put("heap", "" + heap)
@@ -551,7 +545,7 @@ object Cli {
       printLine(s"$brokers $addedUpdated:")
       for (brokerNode <- brokerNodes) {
         val broker: Broker = new Broker()
-        broker.fromJson(brokerNode)
+        broker.fromJson(brokerNode, expanded = true)
 
         printBroker(broker, 1)
         printLine()
@@ -631,7 +625,7 @@ object Cli {
 
       for (brokerNode <- brokerNodes) {
         val broker: Broker = new Broker()
-        broker.fromJson(brokerNode)
+        broker.fromJson(brokerNode, expanded = true)
 
         printBroker(broker, 1)
         printLine()
@@ -684,7 +678,7 @@ object Cli {
 
       for (brokerNode <- brokerNodes) {
         val broker: Broker = new Broker()
-        broker.fromJson(brokerNode)
+        broker.fromJson(brokerNode, expanded = true)
 
         printBroker(broker, 1)
         printLine()
@@ -754,6 +748,7 @@ object Cli {
 
     private def printBroker(broker: Broker, indent: Int): Unit = {
       printLine("id: " + broker.id, indent)
+      printLine("cluster: " + broker.cluster.id, indent)
       printLine("active: " + broker.active, indent)
       printLine("state: " + broker.state() + (if (broker.needsRestart) " (modified, needs restart)" else ""), indent)
       printLine("resources: " + brokerResources(broker), indent)
@@ -841,7 +836,7 @@ object Cli {
       }
 
       cmd match {
-        case "list" => handleList(arg)
+        case "list" => handleList(arg, args)
         case "add" | "update" => handleAddUpdate(arg, args, cmd == "add")
         case "rebalance" => handleRebalance(arg, args)
         case _ => throw new Error("unsupported topic command " + cmd)
@@ -857,7 +852,7 @@ object Cli {
           printLine()
           printLine("Run `help topic <command>` to see details of specific command")
         case "list" =>
-          handleList(null, help = true)
+          handleList(null, null, help = true)
         case "add" | "update" =>
           handleAddUpdate(null, null, cmd == "add", help = true)
         case "rebalance" =>
@@ -867,9 +862,12 @@ object Cli {
       }
     }
 
-    def handleList(expr: String, help: Boolean = false): Unit = {
+    def handleList(expr: String, args: Array[String], help: Boolean = false): Unit = {
+      val parser = newParser()
+      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
+
       if (help) {
-        printLine("List topics\nUsage: topic list [<topic-expr>]\n")
+        printLine("List topics\nUsage: topic list [<topic-expr>] --cluster <cluster-id>\n")
         handleGenericOptions(null, help = true)
 
         printLine()
@@ -878,8 +876,20 @@ object Cli {
         return
       }
 
+      var options: OptionSet = null
+      try { options = parser.parse(args: _*) }
+      catch {
+        case e: OptionException =>
+          parser.printHelpOn(out)
+          printLine()
+          throw new Error(e.getMessage)
+      }
+
+      val cluster = options.valueOf("cluster").asInstanceOf[String]
+
       val params = new util.LinkedHashMap[String, String]
       if (expr != null) params.put("topic", expr)
+      if (cluster != null) params.put("cluster", cluster)
 
       var json: Map[String, Object] = null
       try { json = sendRequest("/topic/list", params) }
@@ -908,6 +918,7 @@ object Cli {
         parser.accepts("replicas", "replicas count. Default - 1").withRequiredArg().ofType(classOf[Integer])
       }
       parser.accepts("options", "topic options. Example: flush.ms=60000,retention.ms=6000000").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
 
       if (help) {
         printLine(s"${cmd.capitalize} topic\nUsage: topic $cmd <topic-expr> [options]\n")
@@ -936,6 +947,7 @@ object Cli {
           throw new Error(e.getMessage)
       }
 
+      val cluster = options.valueOf("cluster").asInstanceOf[String]
       val broker = options.valueOf("broker").asInstanceOf[String]
       val partitions = options.valueOf("partitions").asInstanceOf[Integer]
       val replicas = options.valueOf("replicas").asInstanceOf[Integer]
@@ -943,6 +955,7 @@ object Cli {
 
       val params = new util.LinkedHashMap[String, String]
       params.put("topic", name)
+      if (cluster != null) params.put("cluster", cluster)
       if (broker != null) params.put("broker", broker)
       if (partitions != null) params.put("partitions", "" + partitions)
       if (replicas != null) params.put("replicas", "" + replicas)
@@ -972,6 +985,7 @@ object Cli {
       parser.accepts("broker", "<broker-expr>. Default - *. See below.").withRequiredArg().ofType(classOf[String])
       parser.accepts("replicas", "replicas count. Default - 1").withRequiredArg().ofType(classOf[Integer])
       parser.accepts("timeout", "timeout (30s, 1m, 1h). 0s - no timeout").withRequiredArg().ofType(classOf[String])
+      parser.accepts("cluster", "Cluster id").withRequiredArg().ofType(classOf[String])
 
       if (help) {
         printLine("Rebalance topics\nUsage: topic rebalance <topic-expr>|status [options]\n")
@@ -1000,12 +1014,14 @@ object Cli {
       val broker: String = options.valueOf("broker").asInstanceOf[String]
       val replicas: Integer = options.valueOf("replicas").asInstanceOf[Integer]
       val timeout: String = options.valueOf("timeout").asInstanceOf[String]
+      val cluster: String = options.valueOf("cluster").asInstanceOf[String]
 
       val params = new util.LinkedHashMap[String, String]()
       if (exprOrStatus != "status") params.put("topic", exprOrStatus)
       if (broker != null) params.put("broker", broker)
       if (replicas != null) params.put("replicas", "" + replicas)
       if (timeout != null) params.put("timeout", timeout)
+      if (cluster != null) params.put("cluster", cluster)
 
       var json: Map[String, Object] = null
       try { json = sendRequest("/topic/rebalance", params) }

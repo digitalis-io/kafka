@@ -32,13 +32,13 @@ import kafka.utils.{ZkUtils, ZKStringSerializer}
 import ly.stealth.mesos.kafka.Util.Period
 import org.apache.log4j.Logger
 
-class Rebalancer {
+class Rebalancer(zkConnect: () => String) {
   private val logger: Logger = Logger.getLogger(this.getClass)
 
   @volatile private var assignment: Map[TopicAndPartition, Seq[Int]] = null
   @volatile private var reassignment: Map[TopicAndPartition, Seq[Int]] = null
 
-  private def newZkClient: ZkClient = new ZkClient(Config.zk, 30000, 30000, ZKStringSerializer)
+  private def newZkClient: ZkClient = new ZkClient(zkConnect(), 30000, 30000, ZKStringSerializer)
 
   def running: Boolean = {
     val zkClient = newZkClient

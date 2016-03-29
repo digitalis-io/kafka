@@ -25,20 +25,19 @@ import scala.collection.JavaConversions._
 import java.util
 
 class RebalancerTest extends MesosTestCase {
-  var rebalancer: Rebalancer = null
   var zkClient: ZkClient = null
 
   @Before
   override def before {
     super.before
-    rebalancer = new Rebalancer()
 
     val port = 56789
-    Config.zk = s"localhost:$port"
+    testCluster.zkConnect = s"localhost:$port"
 
     startZkServer()
     zkClient = zkServer.getZkClient
     zkClient.setZkSerializer(ZKStringSerializer)
+    testCluster.rebalancer = new Rebalancer(() => testCluster.zkConnect)
   }
 
   @After
@@ -49,24 +48,23 @@ class RebalancerTest extends MesosTestCase {
 
   @Test
   def start {
-    val cluster = Scheduler.cluster
-    cluster.addBroker(new Broker("0"))
-    cluster.addBroker(new Broker("1"))
+    Nodes.addBroker(new Broker("0", testCluster))
+    Nodes.addBroker(new Broker("1", testCluster))
 
-    cluster.topics.addTopic("topic", Map(0 -> util.Arrays.asList(0), 1 -> util.Arrays.asList(0)))
-    assertFalse(rebalancer.running)
-    rebalancer.start(util.Arrays.asList("topic"), util.Arrays.asList("0", "1"))
+    testCluster.topics.addTopic("topic", Map(0 -> util.Arrays.asList(0), 1 -> util.Arrays.asList(0)))
+    assertFalse(testCluster.rebalancer.running)
+    testCluster.rebalancer.start(util.Arrays.asList("topic"), util.Arrays.asList("0", "1"))
 
-    assertTrue(rebalancer.running)
-    assertFalse(rebalancer.state.isEmpty)
+    assertTrue(testCluster.rebalancer.running)
+    assertFalse(testCluster.rebalancer.state.isEmpty)
   }
 
   @Test
   def start_in_progress {
-    Scheduler.cluster.topics.addTopic("topic", Map(0 -> util.Arrays.asList(0), 1 -> util.Arrays.asList(0)))
+    testCluster.topics.addTopic("topic", Map(0 -> util.Arrays.asList(0), 1 -> util.Arrays.asList(0)))
     ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, "")
 
-    try { rebalancer.start(util.Arrays.asList("t1"), util.Arrays.asList("0", "1")); fail() }
+    try { testCluster.rebalancer.start(util.Arrays.asList("t1"), util.Arrays.asList("0", "1")); fail() }
     catch { case e: Rebalancer.Exception => assertTrue(e.getMessage, e.getMessage.contains("in progress")) }
   }
 }

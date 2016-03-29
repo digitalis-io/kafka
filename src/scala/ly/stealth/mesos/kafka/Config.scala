@@ -41,7 +41,6 @@ object Config {
   var log: File = null
   var api: String = null
   var bindAddress: BindAddress = null
-  var zk: String = null
 
   def apiPort: Int = {
     val port = new URI(api).getPort
@@ -80,7 +79,6 @@ object Config {
     if (props.containsKey("log")) log = new File(props.getProperty("log"))
     if (props.containsKey("api")) api = props.getProperty("api")
     if (props.containsKey("bind-address")) bindAddress = new BindAddress(props.getProperty("bind-address"))
-    if (props.containsKey("zk")) zk = props.getProperty("zk")
   }
 
   override def toString: String = {
@@ -88,7 +86,7 @@ object Config {
       |debug: $debug, storage: $storage
       |mesos: master=$master, user=${if (user == null || user.isEmpty) "<default>" else user}, principal=${if (principal != null) principal else "<none>"}, secret=${if (secret != null) "*****" else "<none>"}
       |framework: name=$frameworkName, role=$frameworkRole, timeout=$frameworkTimeout
-      |api: $api, bind-address: ${if (bindAddress != null) bindAddress else "<all>"}, zk: $zk, jre: ${if (jre == null) "<none>" else jre}
+      |api: $api, bind-address: ${if (bindAddress != null) bindAddress else "<all>"}, jre: ${if (jre == null) "<none>" else jre}
     """.stripMargin.trim
   }
 }

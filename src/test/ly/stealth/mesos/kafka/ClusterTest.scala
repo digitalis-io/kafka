@@ -18,65 +18,57 @@
 package ly.stealth.mesos.kafka
 
 import org.junit.{Before, Test}
-import java.util
 import org.junit.Assert._
-import ly.stealth.mesos.kafka.Broker.State
 
 class ClusterTest extends MesosTestCase {
-  var cluster: Cluster = new Cluster()
-
   @Before
   override def before {
     super.before
-    cluster.clear()
+    Nodes.clear()
   }
 
   @Test
-  def addBroker_removeBroker_getBrokers {
-    assertTrue(cluster.getBrokers.isEmpty)
+  def addCluster_removeCluster {
+    assertTrue(Nodes.getBrokers.isEmpty)
 
-    val broker0 = cluster.addBroker(new Broker("0"))
-    val broker1 = cluster.addBroker(new Broker("1"))
-    assertEquals(util.Arrays.asList(broker0, broker1), cluster.getBrokers)
+    val cluster0 = Nodes.addCluster(new Cluster("0"))
+    val cluster1 = Nodes.addCluster(new Cluster("1"))
+    assertEquals(Set(cluster0, cluster1), Nodes.getClusters.toSet)
 
-    cluster.removeBroker(broker0)
-    assertEquals(util.Arrays.asList(broker1), cluster.getBrokers)
+    Nodes.removeCluster(cluster0)
+    assertEquals(Set(cluster1), Nodes.getClusters.toSet)
 
-    cluster.removeBroker(broker1)
-    assertTrue(cluster.getBrokers.isEmpty)
+    Nodes.removeCluster(cluster1)
+    assertTrue(Nodes.getClusters.isEmpty)
   }
 
   @Test
-  def getBroker {
-    assertNull(cluster.getBroker("0"))
+  def getCluster {
+    assertNull(Nodes.getCluster("0"))
 
-    val broker0 = cluster.addBroker(new Broker("0"))
-    assertSame(broker0, cluster.getBroker("0"))
+    val broker0 = Nodes.addCluster(new Cluster("0"))
+    assertSame(broker0, Nodes.getCluster("0"))
   }
 
   @Test
   def save_load {
-    cluster.addBroker(new Broker("0"))
-    cluster.addBroker(new Broker("1"))
-    cluster.save()
+    Nodes.addCluster(new Cluster("0"))
+    Nodes.addCluster(new Cluster("1"))
+    Nodes.save()
 
-    val read = new Cluster()
-    read.load()
-    assertEquals(2, read.getBrokers.size())
+    Nodes.load()
+    assertEquals(2, Nodes.getClusters.size)
   }
 
   @Test
   def toJson_fromJson {
-    val broker0 = cluster.addBroker(new Broker("0"))
-    broker0.task = new Broker.Task("1", "slave", "executor", "host", _state = State.RUNNING)
-    cluster.addBroker(new Broker("1"))
-    cluster.frameworkId = "id"
+    val cluster = Nodes.addCluster(new Cluster("0"))
+    cluster.zkConnect = "zk://master:2181"
 
-    val read = new Cluster()
+    val read: Cluster = new Cluster()
     read.fromJson(Util.parseJson("" + cluster.toJson))
 
-    assertEquals(cluster.frameworkId, read.frameworkId)
-    assertEquals(2, read.getBrokers.size())
-    BrokerTest.assertBrokerEquals(broker0, read.getBroker("0"))
+    assertEquals(cluster.id, read.id)
+    assertEquals(cluster.zkConnect, read.zkConnect)
   }
 }

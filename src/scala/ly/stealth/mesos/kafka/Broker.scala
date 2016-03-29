@@ -23,18 +23,17 @@ import org.apache.mesos.Protos.Resource.DiskInfo.Persistence
 import org.apache.mesos.Protos.Volume.Mode
 
 import scala.collection.JavaConversions._
-import scala.collection
 import org.apache.mesos.Protos.{Volume, Value, Resource, Offer}
-import java.util._
+import java.util.{TimeZone, Collections, UUID, Date}
 import ly.stealth.mesos.kafka.Broker.{Metrics, Stickiness, Failover}
 import ly.stealth.mesos.kafka.Util.{BindAddress, Period, Range, Str}
 import java.text.SimpleDateFormat
-import scala.List
-import scala.collection.Map
 import scala.util.parsing.json.JSONObject
 
 class Broker(_id: String = "0") {
   var id: String = _id
+  var cluster: Cluster = null
+
   @volatile var active: Boolean = false
 
   var cpus: Double = 1
@@ -56,6 +55,16 @@ class Broker(_id: String = "0") {
 
   // broker has been modified while being in non stopped state, once stopped or before task launch becomes false
   var needsRestart: Boolean = false
+
+  def this(id: String, cluster: Cluster){
+    this(id)
+    this.cluster = cluster
+  }
+
+  def this(json: Map[String, Any], expanded: Boolean = false) = {
+    this
+    fromJson(json, expanded)
+  }
 
   def options(defaults: util.Map[String, String] = null): util.Map[String, String] = {
     val result = new util.LinkedHashMap[String, String]()
@@ -243,8 +252,9 @@ class Broker(_id: String = "0") {
     matches
   }
 
-  def fromJson(node: Map[String, Object]): Unit = {
+  def fromJson(node: Map[String, Any], expanded: Boolean = false): Unit = {
     id = node("id").asInstanceOf[String]
+    cluster = if (expanded) new Cluster(node("cluster").asInstanceOf[Map[String, Any]]) else Nodes.getCluster(node("cluster").asInstanceOf[String])
     active = node("active").asInstanceOf[Boolean]
 
     cpus = node("cpus").asInstanceOf[Number].doubleValue()
@@ -276,9 +286,10 @@ class Broker(_id: String = "0") {
     if (node.contains("needsRestart")) needsRestart = node("needsRestart").asInstanceOf[Boolean]
   }
 
-  def toJson: JSONObject = {
+  def toJson(expanded: Boolean = false): JSONObject = {
     val obj = new collection.mutable.LinkedHashMap[String, Any]()
     obj("id") = id
+    obj("cluster") = if (expanded) cluster.toJson else cluster.id
     obj("active") = active
 
     obj("cpus") = cpus
@@ -315,7 +326,7 @@ object Broker {
 
   def idFromExecutorId(executorId: String): String = idFromTaskId(executorId)
 
-  def isOptionOverridable(name: String): Boolean = !List("broker.id", "port", "zookeeper.connect").contains(name)
+  def isOptionOverridable(name: String): Boolean = !scala.List("broker.id", "port", "zookeeper.connect").contains(name)
 
   class Stickiness(_period: Period = new Period("10m")) {
     var period: Period = _period

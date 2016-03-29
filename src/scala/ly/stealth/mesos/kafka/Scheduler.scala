@@ -30,7 +30,6 @@ import ly.stealth.mesos.kafka.Util.{Version, Period, Str}
 object Scheduler extends org.apache.mesos.Scheduler {
   private val logger: Logger = Logger.getLogger(this.getClass)
 
-  val cluster: Cluster = new Cluster()
   private var driver: SchedulerDriver = null
 
   val logs = new ConcurrentHashMap[Long, Option[String]]()
@@ -69,7 +68,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
         "log.dirs" -> "kafka-logs",
         "log.retention.bytes" -> ("" + 10l * 1024 * 1024 * 1024),
 
-        "zookeeper.connect" -> Config.zk,
+        "zookeeper.connect" -> broker.cluster.zkConnect,
         "host.name" -> offer.getHostname
       )
 
@@ -80,7 +79,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
         defaults += ("log.dirs" -> "data/kafka-logs")
 
       val data = new util.HashMap[String, String]()
-      data.put("broker", "" + broker.toJson)
+      data.put("broker", "" + broker.toJson(expanded = true))
       data.put("defaults", Util.formatMap(defaults))
       ByteString.copyFromUtf8(Util.formatMap(data))
     }
@@ -99,8 +98,8 @@ object Scheduler extends org.apache.mesos.Scheduler {
   def registered(driver: SchedulerDriver, id: FrameworkID, master: MasterInfo): Unit = {
     logger.info("[registered] framework:" + Str.id(id.getValue) + " master:" + Str.master(master))
 
-    cluster.frameworkId = id.getValue
-    cluster.save()
+    Nodes.frameworkId = id.getValue
+    Nodes.save()
 
     this.driver = driver
     reconcileTasksIfRequired(force = true)
@@ -129,7 +128,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
   def frameworkMessage(driver: SchedulerDriver, executorId: ExecutorID, slaveId: SlaveID, data: Array[Byte]): Unit = {
     logger.info("[frameworkMessage] executor:" + Str.id(executorId.getValue) + " slave:" + Str.id(slaveId.getValue) + " data: " + new String(data))
 
-    val broker = cluster.getBroker(Broker.idFromExecutorId(executorId.getValue))
+    val broker = Nodes.getBroker(Broker.idFromExecutorId(executorId.getValue))
 
     try {
       val node: Map[String, Object] = Util.parseJson(new String(data))
@@ -187,7 +186,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     
     if (!declineReasons.isEmpty) logger.info("Declined offers:\n" + declineReasons.mkString("\n"))
 
-    for (broker <- cluster.getBrokers) {
+    for (broker <- Nodes.getBrokers) {
       if (broker.shouldStop) {
         logger.info(s"Stopping broker ${broker.id}: killing task ${broker.task.id}")
         driver.killTask(TaskID.newBuilder.setValue(broker.task.id).build)
@@ -196,7 +195,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     }
 
     reconcileTasksIfRequired()
-    cluster.save()
+    Nodes.save()
   }
 
   private[kafka] def acceptOffer(offer: Offer): String = {
@@ -204,7 +203,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     val now = new Date()
 
     var reason = ""
-    for (broker <- cluster.getBrokers.filter(_.shouldStart(offer.getHostname))) {
+    for (broker <- Nodes.getBrokers.filter(_.shouldStart(offer.getHostname))) {
       val diff = broker.matches(offer, now, otherTasksAttributes)
 
       if (diff == null) {
@@ -220,7 +219,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
   }
 
   private[kafka] def onBrokerStatus(status: TaskStatus): Unit = {
-    val broker = cluster.getBroker(Broker.idFromTaskId(status.getTaskId.getValue))
+    val broker = Nodes.getBroker(Broker.idFromTaskId(status.getTaskId.getValue))
 
     status.getState match {
       case TaskState.TASK_RUNNING =>
@@ -232,7 +231,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
       case _ => logger.warn("Got unexpected task state: " + status.getState)
     }
 
-    cluster.save()
+    Nodes.save()
   }
 
   private[kafka] def onBrokerStarted(broker: Broker, status: TaskStatus): Unit = {
@@ -280,7 +279,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     broker.needsRestart = false
   }
 
-  private def isReconciling: Boolean = cluster.getBrokers.exists(b => b.task != null && b.task.reconciling)
+  private def isReconciling: Boolean = Nodes.getBrokers.exists(b => b.task != null && b.task.reconciling)
 
   private[kafka] def launchTask(broker: Broker, offer: Offer): Unit = {
     broker.needsRestart = false
@@ -326,7 +325,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     reconcileTime = now
 
     if (reconciles > RECONCILE_MAX_TRIES) {
-      for (broker <- cluster.getBrokers.filter(b => b.task != null && b.task.reconciling)) {
+      for (broker <- Nodes.getBrokers.filter(b => b.task != null && b.task.reconciling)) {
         logger.info(s"Reconciling exceeded $RECONCILE_MAX_TRIES tries for broker ${broker.id}, sending killTask for task ${broker.task.id}")
         driver.killTask(TaskID.newBuilder().setValue(broker.task.id).build())
         broker.task = null
@@ -337,7 +336,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
 
     val statuses = new util.ArrayList[TaskStatus]
 
-    for (broker <- cluster.getBrokers.filter(_.task != null))
+    for (broker <- Nodes.getBrokers.filter(_.task != null))
       if (force || broker.task.reconciling) {
         broker.task.state = Broker.State.RECONCILING
         logger.info(s"Reconciling $reconciles/$RECONCILE_MAX_TRIES state of broker ${broker.id}, task ${broker.task.id}")
@@ -360,7 +359,7 @@ object Scheduler extends org.apache.mesos.Scheduler {
     }
 
     val values = new util.ArrayList[String]()
-    for (broker <- cluster.getBrokers)
+    for (broker <- Nodes.getBrokers)
       if (broker.task != null) {
         val v = value(broker.task, name)
         if (v != null) values.add(v)
@@ -373,12 +372,12 @@ object Scheduler extends org.apache.mesos.Scheduler {
     initLogging()
     logger.info(s"Starting ${getClass.getSimpleName}:\n$Config")
 
-    cluster.load()
+    Nodes.load()
     HttpServer.start()
 
     val frameworkBuilder = FrameworkInfo.newBuilder()
     frameworkBuilder.setUser(if (Config.user != null) Config.user else "")
-    if (cluster.frameworkId != null) frameworkBuilder.setId(FrameworkID.newBuilder().setValue(cluster.frameworkId))
+    if (Nodes.frameworkId != null) frameworkBuilder.setId(FrameworkID.newBuilder().setValue(Nodes.frameworkId))
     frameworkBuilder.setRole(Config.frameworkRole)
 
     frameworkBuilder.setName(Config.frameworkName)
