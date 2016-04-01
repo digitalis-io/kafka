@@ -90,6 +90,8 @@ object Cli {
         BrokerCli.handle(subCmd, null, help = true)
       case "topic" =>
         TopicCli.handle(subCmd, null, help = true)
+      case "cluster" =>
+        ClusterCli.handle(subCmd, null, help = true)
       case _ =>
         throw new Error(s"unsupported command $cmd")
     }
@@ -144,6 +146,7 @@ object Cli {
     printLine("Commands:")
     printLine("help [cmd [cmd]] - print general or command-specific help", 1)
     if (SchedulerCli.isEnabled) printLine("scheduler        - start scheduler", 1)
+    printLine("cluster          - cluster management commands", 1)
     printLine("broker           - broker management commands", 1)
     printLine("topic            - topic management commands", 1)
   }

@@ -34,11 +34,19 @@ object ClusterCli {
     }
   }
 
+  private[kafka] def printCmds(): Unit = {
+    printLine("Commands:")
+    printLine("add          - add cluster", 1)
+    printLine("update       - update cluster configuration", 1)
+    printLine("remove       - remove cluster", 1)
+    printLine("list         - list existing clusters", 1)
+  }
+
   private def handleHelp(cmd: String): Unit = {
     cmd match {
       case null =>
         printLine("Cluster management commands\nUsage: cluster <command>\n")
-        printCmds()
+        ClusterCli.printCmds()
 
         printLine()
         printLine("Run `help cluster <command>` to see details of specific command")
@@ -55,7 +63,7 @@ object ClusterCli {
 
   private def handleList(expr: String, help: Boolean = false): Unit = {
     if (help) {
-      printLine("List brokers\nUsage: cluster list\n")
+      printLine("List clusters\nUsage: cluster list\n")
       handleGenericOptions(null, help = true)
 
       printLine()

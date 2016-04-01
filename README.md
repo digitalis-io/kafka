@@ -130,8 +130,24 @@ Starting and using 1 broker
 
 First let's start up and use 1 broker with the default settings. Further in the readme you can see how to change these from the defaults.
 
+Each broker should be part of the cluster. Adding clusters will let you logically separate Kafka nodes. A Kafka-mesos cluster has a unique id 
+(specified on cluster creation) and Zookeeper connection string - a Zookeeper url (with optional chroot an the end) to store all Kafka metadata.
+Zookeeper connection string specified on cluster level will be inherited by brokers as zk.connect config setting.
+
+To add a cluster execute:
+
 ```
-# ./kafka-mesos.sh broker add 0
+# ./kafka-mesos.sh cluster add kafka-cluster-1 --zk-connect master:2181/kafka-1
+cluster added:
+  id: kafka-cluster-1
+  zk connection string: master:2181/kafka-1
+```
+(You can also update and delete clusters, follow respective examples as with `broker` command line interface)
+
+Now you can add a broker:
+
+```
+# ./kafka-mesos.sh broker add 0 --cluster kafka-cluster-1
 broker added:
   id: 0
   active: false
@@ -305,10 +321,10 @@ current limit is 100Kb no matter how many lines being requested.
 
 High Availability Scheduler State
 -------------------------
-The scheduler supports storing the cluster state in Zookeeper. It currently shares a znode within the mesos ensemble. To turn this on in properties 
+The scheduler supports storing the cluster state in Zookeeper. To turn this on in properties 
 
 ```
-clusterStorage=zk:/kafka-mesos
+clusterStorage=zk:master:2181/kafka-mesos
 ```
 
 Failed Broker Recovery
@@ -520,6 +536,75 @@ Error: broker 1 timeout on start
 
 Navigating the CLI
 ==================
+
+Adding a cluster
+-------------------------------
+
+```
+# ./kafka-mesos.sh help cluster add
+Add cluster
+Usage: cluster add <cluster-id> [options]
+
+Option        Description                                                                                
+------        -----------                                                                                
+--zk-connect  REQUIRED. Connection string to Kafka Zookeeper cluster. E.g.: 192.168.0.1:2181,192.168.0.2:
+                2181/kafka1                                                                              
+
+Generic Options
+Option  Description                         
+------  -----------                         
+--api   Api url. Example: http://master:7000
+```
+
+Updating a cluster
+-------------------------------
+
+```
+# ./kafka-mesos.sh help cluster update
+Update cluster
+Usage: cluster update <cluster-id> [options]
+
+Option        Description                                                                                
+------        -----------                                                                                
+--zk-connect  REQUIRED. Connection string to Kafka Zookeeper cluster. E.g.: 192.168.0.1:2181,192.168.0.2:
+                2181/kafka1                                                                              
+
+Generic Options
+Option  Description                         
+------  -----------                         
+--api   Api url. Example: http://master:7000
+```
+
+Removing a cluster
+-------------------------------
+
+```
+# ./kafka-mesos.sh help cluster remove
+Remove cluster
+Usage: cluster remove <cluster-id>
+
+Generic Options
+Option  Description                         
+------  -----------                         
+--api   Api url. Example: http://master:7000
+
+```
+
+Listing clusters
+-------------------------------
+
+```
+# ./kafka-mesos.sh help cluster list
+List brokers
+Usage: cluster list
+
+Generic Options
+Option  Description                         
+------  -----------
+--api   Api url. Example: http://master:7000
+
+```
+
 
 Adding brokers to the cluster
 -------------------------------
@@ -774,7 +859,7 @@ Listing Topics
 ```
 #./kafka-mesos.sh help topic list
 List topics
-Usage: topic list [<topic-expr>]
+Usage: topic list [<topic-expr>] --cluster <cluster-id>
 
 Generic Options
 Option  Description
@@ -793,7 +878,7 @@ Adding Topic
 ```
 #./kafka-mesos.sh help topic add
 Add topic
-Usage: topic add <topic-expr> [options]
+Usage: topic add <topic-expr> [options] --cluster <cluster-id>
 
 Option                  Description
 ------                  -----------
@@ -830,7 +915,7 @@ Updating Topic
 ```
 #./kafka-mesos.sh help topic update
 Update topic
-Usage: topic update <topic-expr> [options]
+Usage: topic update <topic-expr> [options] --cluster <cluster-id>
 
 Option     Description
 ------     -----------
@@ -853,7 +938,7 @@ Rebalancing topics
 ```
 #./kafka-mesos.sh help topic rebalance
 Rebalance topics
-Usage: topic rebalance <topic-expr>|status [options]
+Usage: topic rebalance <topic-expr>|status [options] --cluster <cluster-id>
 
 Option                Description
 ------                -----------
