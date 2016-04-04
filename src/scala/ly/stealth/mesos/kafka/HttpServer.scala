@@ -160,7 +160,6 @@ object HttpServer {
 
     private def handleAddUpdateCluster(add: Boolean, request: HttpServletRequest, response: HttpServletResponse) {
       val id: String = request.getParameter("cluster")
-      val zkConnect: String = request.getParameter("zkConnect")
 
       if (id == null || id.isEmpty) {
         response.sendError(404, "cluster required")
@@ -168,6 +167,13 @@ object HttpServer {
       }
 
       val errors = new util.ArrayList[String]
+
+      val zkConnect: String = request.getParameter("zkConnect")
+      var controller: java.lang.Integer = null
+      if (request.getParameter("controller") != null)
+        try { controller = java.lang.Integer.valueOf(request.getParameter("controller")) }
+        catch { case e: NumberFormatException => errors.add("Invalid controller") }
+
       var cluster = Nodes.getCluster(id)
       if (add && cluster != null)
         errors.add("duplicate cluster")
@@ -184,6 +190,7 @@ object HttpServer {
       if (add)
         cluster = Nodes.addCluster(new Cluster(id))
       if (zkConnect != null) cluster.zkConnect = zkConnect
+      if (controller != null) cluster.controller = controller.toInt
 
       Nodes.save()
       response.getWriter.println("" + new JSONObject(Map("clusters" -> new JSONArray(List(cluster.toJson)))))

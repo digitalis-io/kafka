@@ -91,12 +91,15 @@ object ClusterCli {
   private def printCluster(cluster: Cluster, indent: Int): Unit = {
     printLine("id: " + cluster.id, indent)
     printLine("zk connection string: " + cluster.zkConnect, indent)
+    printLine("controller: " + (if (cluster == null) "<auto>" else cluster.controller), indent)
   }
 
   private def handleAddUpdate(id: String, args: Array[String], add: Boolean, help: Boolean = false): Unit = {
     val parser = newParser()
     parser.accepts("zk-connect", "REQUIRED. Connection string to Kafka Zookeeper cluster. E.g.: 192.168.0.1:2181,192.168.0.2:2181/kafka1")
       .withRequiredArg().ofType(classOf[String])
+    parser.accepts("controller", "Optionally pins controller to a broker.")
+      .withRequiredArg().ofType(classOf[java.lang.Integer])
 
     if (help) {
       val cmd = if (add) "add" else "update"
@@ -121,11 +124,13 @@ object ClusterCli {
     }
 
     val zkConnect = options.valueOf("zk-connect").asInstanceOf[String]
+    val controller = options.valueOf("controller").asInstanceOf[java.lang.Integer]
 
     val params = new util.LinkedHashMap[String, String]
     params.put("cluster", id)
 
     if (zkConnect != null) params.put("zkConnect", zkConnect)
+    if (controller != null) params.put("controller", controller.toString)
 
     var json: Map[String, Object] = null
     try {
