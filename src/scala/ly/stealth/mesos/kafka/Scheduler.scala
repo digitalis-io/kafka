@@ -80,6 +80,9 @@ object Scheduler extends org.apache.mesos.Scheduler {
       if (reservation.volume != null)
         defaults += ("log.dirs" -> "data/kafka-logs")
 
+      if (broker.cluster.controller != null)
+          defaults += ("controller.eligibility" -> (broker.cluster.controller == broker.id.toInt).toString)
+
       val data = new util.HashMap[String, String]()
       data.put("broker", "" + broker.toJson(expanded = true))
       data.put("defaults", Strings.formatMap(defaults))

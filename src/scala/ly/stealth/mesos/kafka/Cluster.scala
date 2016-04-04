@@ -6,6 +6,7 @@ import scala.util.parsing.json.JSONObject
 class Cluster {
   var id: String = null
   var zkConnect: String = null
+  var controller: java.lang.Integer = null
 
   private[kafka] var topics: Topics = new Topics(() => zkConnect)
   private[kafka] var rebalancer: Rebalancer = new Rebalancer(() => zkConnect)
@@ -29,6 +30,8 @@ class Cluster {
     id = json("id").asInstanceOf[String]
     if (json.contains("zkConnect"))
       zkConnect = json("zkConnect").asInstanceOf[String]
+    if (json.contains("controller"))
+      controller = json("controller").asInstanceOf[java.lang.Integer]
   }
 
   def toJson: JSONObject = {
@@ -36,6 +39,8 @@ class Cluster {
     json("id") = id
     if (zkConnect != null)
       json("zkConnect") = zkConnect
+    if (controller != null)
+      json("controller") = controller
 
     new JSONObject(json.toMap)
   }
