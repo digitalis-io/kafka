@@ -182,7 +182,7 @@ object HttpServer {
       if (!add && cluster.active)
         errors.add("cluster has active nodes")
 
-      if (add && zkConnect == null || zkConnect.trim.isEmpty)
+      if (add && (zkConnect == null || zkConnect.trim.isEmpty))
           errors.add("zk connection string is empty")
 
       if (!errors.isEmpty) { response.sendError(400, errors.mkString("; ")); return }

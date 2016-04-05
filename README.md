@@ -20,6 +20,7 @@ For issues https://github.com/mesos/kafka/issues
 * [Passing multiple options](#passing-multiple-options)
 * [Broker metrics](#broker-metrics)
 * [Rolling restart](#rolling-restart)
+* [Pinning controller to a broker](#pinning-controller)
 
 
 [Navigating the CLI](#navigating-the-cli)
@@ -533,6 +534,37 @@ or for `start`
 # ./kafka-mesos.sh broker restart 1..3 --timeout 5m
 Error: broker 1 timeout on start
 ```
+
+Pinning controller to a broker
+-----------------------------
+
+With cluster level option `controller` you can pin a controller to a particular broker. This means only defined 
+broker will be eligible for leader election and thus will always win in Zookeeper leader election rounds. Whenever controller 
+is (re-)elected the chosen broker, if alive, will become a controller. 
+
+Note, that everything else in terms of Kafka algorithms and procedures remains the same - if you pin a controller to a broker that is 
+**not** active you Kafka cluster may not operate correctly, in essence, all routines involving controller will be broken 
+(e.g. adding a new topic - brokers simply will not receive metadata update from the controller if it is not alive).
+ 
+To get this feature in your Kafka cluster you need to patch and build Kafka distribution first. The patch is stored [here](https://issues.apache.org/jira/browse/KAFKA-2310) 
+and available for Kafka 0.8.1, 0.8.2 and 0.9. To apply a patch, e.g. to branch 0.8.2:
+  
+```
+# git checkout 0.8.2
+# git am KAFKA-2310_0.8.2.patch
+```
+
+To enable this functionality for particular Kafka cluster in Kafka-mesos:
+
+```
+# ./kafka-mesos.sh cluster add c1 --zk-connect master:2181 --controller 1
+cluster added:
+  id: c1
+  zk connection string: master:2181
+  controller: 1
+```
+
+Now you can add brokers to the cluster but only broker with id `1` will become a controller.
 
 Navigating the CLI
 ==================
