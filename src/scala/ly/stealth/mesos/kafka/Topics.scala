@@ -63,21 +63,30 @@ class Topics(zkConnect: () => String) {
     }
   }
 
-  def fairAssignment(partitions: Int = 1, replicas: Int = 1, brokers: util.List[Int] = null): util.Map[Int, util.List[Int]] = {
+  def fairAssignment(partitions: Int = 1, replicas: Int = 1, brokers: util.List[Int] = null,
+                     pinnedController: java.lang.Integer = null): util.Map[Int, util.List[Int]] = {
     var brokers_ = brokers
 
     if (brokers_ == null) {
       val zkClient = newZkClient
-      try { brokers_ = ZkUtils.getSortedBrokerList(zkClient)}
+      try {
+        val existingBrokers = ZkUtils.getSortedBrokerList(zkClient)
+        brokers_ =
+        if (pinnedController == null)
+          existingBrokers
+        else
+          existingBrokers.filterNot(id => id == pinnedController)
+      }
       finally { zkClient.close() }
     }
 
     AdminUtils.assignReplicasToBrokers(brokers_, partitions, replicas, 0, 0).mapValues(new util.ArrayList[Int](_))
   }
 
-  def addTopic(name: String, assignment: util.Map[Int, util.List[Int]] = null, options: util.Map[String, String] = null): Topic = {
+  def addTopic(name: String, assignment: util.Map[Int, util.List[Int]] = null, options: util.Map[String, String] = null,
+               pinnedController: java.lang.Integer = null): Topic = {
     var assignment_ = assignment
-    if (assignment_ == null) assignment_ = fairAssignment(1, 1, null)
+    if (assignment_ == null) assignment_ = fairAssignment(1, 1, null, pinnedController)
 
     val config: Properties = new Properties()
     if (options != null)

@@ -374,10 +374,11 @@ class CliTest extends KafkaMesosTestCase {
 
   @Test
   def cluster_add {
-    exec("cluster add my_cluster --zk-connect zk://master:2181/kafka_1")
+    exec("cluster add my_cluster --zk-connect zk://master:2181/kafka_1 --controller 1")
     assertOutContains("cluster added:")
     assertOutContains("id: my_cluster")
     assertOutContains("zk connection string: zk://master:2181/kafka_1")
+    assertOutContains("controller: 1")
 
     assertEquals(2, Nodes.getClusters.size)
     val cluster = Nodes.getCluster("my_cluster")
@@ -395,6 +396,12 @@ class CliTest extends KafkaMesosTestCase {
     assertOutContains("zk connection string: zk://host:port/k1")
 
     assertEquals("zk://host:port/k1", cluster.zkConnect)
+
+    exec(s"cluster update my_cluster --controller 0")
+    assertOutContains("cluster updated:")
+    assertOutContains("controller: 0")
+
+    assertEquals(0, cluster.controller)
   }
 
   @Test

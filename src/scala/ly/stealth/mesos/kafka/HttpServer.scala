@@ -641,7 +641,7 @@ object HttpServer {
 
       val topicNodes= new ListBuffer[JSONObject]
       for (name <- topicNames) {
-        if (add) topics.addTopic(name, topics.fairAssignment(partitions, replicas, brokerIds), options)
+        if (add) topics.addTopic(name, topics.fairAssignment(partitions, replicas, brokerIds, cluster.controller), options, cluster.controller)
         else topics.updateTopic(topics.getTopic(name), options)
 
         topicNodes.add(topics.getTopic(name).toJson)

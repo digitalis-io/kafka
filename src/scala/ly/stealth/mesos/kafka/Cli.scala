@@ -755,6 +755,8 @@ object Cli {
       printLine("cluster: " + broker.cluster.id, indent)
       printLine("active: " + broker.active, indent)
       printLine("state: " + broker.state() + (if (broker.needsRestart) " (modified, needs restart)" else ""), indent)
+      if (broker.id.toInt == broker.cluster.controller)
+        printLine("pinned controller: true", indent)
       printLine("resources: " + brokerResources(broker), indent)
 
       if (broker.bindAddress != null) printLine("bind-address: " + broker.bindAddress, indent)
