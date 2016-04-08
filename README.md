@@ -20,7 +20,7 @@ For issues https://github.com/mesos/kafka/issues
 * [Passing multiple options](#passing-multiple-options)
 * [Broker metrics](#broker-metrics)
 * [Rolling restart](#rolling-restart)
-* [Pinning controller to a broker](#pinning-controller)
+* [Pinning controller to a broker](#pinning-controller-to-a-broker)
 
 
 [Navigating the CLI](#navigating-the-cli)
@@ -550,8 +550,15 @@ To get this feature in your Kafka cluster you need to patch and build Kafka dist
 and available for Kafka 0.8.1, 0.8.2 and 0.9. To apply a patch, e.g. to branch 0.8.2:
   
 ```
+# cd path-to-cloned-kafka
 # git checkout 0.8.2
 # git am KAFKA-2310_0.8.2.patch
+```
+
+To build Kafka distribution:  
+
+```
+# cd path-to-patched-kafka && ./gradlew releaseTarGz
 ```
 
 To enable this functionality for particular Kafka cluster in Kafka-mesos:
@@ -565,6 +572,26 @@ cluster added:
 ```
 
 Now you can add brokers to the cluster but only broker with id `1` will become a controller.
+
+Also, when a cluster has a pinned controller, default topic creation logic (`topic add`) is slightly different. In case you don't
+specify `broker` parameter when creating a topic, the broker-controller will be removed from the pool of available brokers - 
+that is no partitions will be assigned to that broker:
+
+```
+# ./kafka-mesos.sh topic add t1 --cluster c1 --partitions 5
+  topic added:
+    name: t1
+    partitions: 0:[0], 1:[0], 2:[0], 3:[0], 4:[0]
+```
+
+To get an even partition assignment use `broker` option:
+
+```
+# ./kafka-mesos.sh topic add t2 --cluster c1 --partitions 5 --broker "*"
+  topic added:
+    name: t2
+    partitions: 0:[0], 1:[1], 2:[0], 3:[1], 4:[0]
+```
 
 Navigating the CLI
 ==================
